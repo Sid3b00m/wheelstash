@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+
+# secrets and local env
+.env
+.env.*
+!.env.example
+
+# archives and logs
+*.zip
+*.tgz
+*.log
+logs/
+
+# OS / editor
+.DS_Store
+*.swp
+
+# runtime data (keep empty storage placeholders; seed stays under seed/)
+storage/*
+!storage/.gitkeep
+!storage/uploads/
+storage/uploads/*
+!storage/uploads/.gitkeep

@@ -1,0 +1,6 @@
+Vendored third-party libraries (copied locally; not loaded from a CDN at runtime).
+
+- @zxing/library 0.23.0 — Apache-2.0 (zxing/LICENSE)
+- tesseract.js 7.0.0 — Apache-2.0 (tesseract/LICENSE.md)
+- tesseract.js-core (LSTM wasm) — Apache-2.0 (tesseract/CORE-LICENSE)
+- English traineddata from @tesseract.js-data/eng 4.0.0_best_int (eng.traineddata.gz)

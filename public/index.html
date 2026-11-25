@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hot Wheels Tracker</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect rx='12' width='64' height='64' fill='%23ff6a00'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-size='28' font-family='Arial Black,sans-serif' fill='white'%3EHW%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">HW</span>
+      <div>
+        <h1>Hot Wheels Tracker</h1>
+        <p class="tagline">Local collection catalog, rarity flags, and weekly hunt list</p>
+        <p class="tagline" id="lastRefresh">Last auto-refresh: never</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <a class="btn ghost" href="/api/export.csv" id="exportCsv">Export CSV</a>
+      <a class="btn ghost" href="/api/export.json" id="exportJson">Export JSON</a>
+      <button type="button" id="themeToggle" class="btn icon" aria-label="Toggle color theme">Theme</button>
+    </div>
+  </header>
+
+  <nav class="userbar" aria-label="Collectors">
+    <div class="user-tabs" id="userTabs" role="tablist" aria-label="Users"></div>
+    <div class="user-actions">
+      <button type="button" class="btn ghost" id="addUserBtn">Add person</button>
+      <button type="button" class="btn ghost" id="renameUserBtn">Rename</button>
+      <button type="button" class="btn danger-ghost" id="deleteUserBtn">Delete</button>
+    </div>
+  </nav>
+
+  <section class="stats" id="stats" aria-live="polite"></section>
+
+  <nav class="tabs" role="tablist">
+    <button type="button" class="tab is-active" data-view="collection" role="tab" aria-selected="true">Collection</button>
+    <button type="button" class="tab" data-view="hunt" role="tab" aria-selected="false">Hunt list</button>
+    <button type="button" class="tab" data-view="rarity" role="tab" aria-selected="false">Rarity list</button>
+  </nav>
+
+  <main>
+    <section id="view-collection" class="view is-active">
+      <div class="toolbar collection-toolbar">
+        <input type="search" id="carSearch" placeholder="Search name, series, toy #, color, storage…" aria-label="Search collection" />
+        <select id="carRarity" aria-label="Filter by rarity">
+          <option value="">All cars</option>
+          <option value="RARE">Rare / flagged only</option>
+          <option value="STH">Super Treasure Hunt</option>
+          <option value="TH">Treasure Hunt</option>
+          <option value="CHASE">Chase</option>
+          <option value="RLC">Red Line Club</option>
+          <option value="ERROR">Error / Variant</option>
+          <option value="HIGH">High value</option>
+        </select>
+        <select id="carSort" aria-label="Sort collection">
+          <option value="series:asc" selected>Series (in number order)</option>
+          <option value="name:asc">Name A–Z</option>
+          <option value="name:desc">Name Z–A</option>
+          <option value="year:desc">Year newest</option>
+          <option value="year:asc">Year oldest</option>
+          <option value="quantity:desc">Quantity</option>
+          <option value="storage:asc">Storage</option>
+        </select>
+        <div class="scan-actions">
+          <button type="button" class="btn ghost" id="fetchStockBtn" title="Look up a Hot Wheels Wiki photo for cars that don't have one yet">Fetch stock images</button>
+          <button type="button" class="btn primary" id="addCarBtn">Add car</button>
+          <button type="button" class="btn scan-btn" id="scanCarBtn">Scan</button>
+          <form id="addByNumberForm" class="add-by-number">
+            <label class="visually-hidden" for="carNumberInput">Add by car number</label>
+            <input id="carNumberInput" type="text" maxlength="40" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Toy # or 13/250" aria-label="Add by car number" />
+            <button type="submit" class="btn" id="lookupNumberBtn">Look up</button>
+          </form>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Name</th>
+              <th>Series</th>
+              <th>Year</th>
+              <th>Color</th>
+              <th>Condition</th>
+              <th>Qty</th>
+              <th>Storage</th>
+              <th>Toy #</th>
+              <th>Rarity</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="carTable"></tbody>
+        </table>
+        <p id="carEmpty" class="empty hidden">No cars yet. Add your first car to start the catalog.</p>
+      </div>
+    </section>
+
+    <section id="view-hunt" class="view">
+      <div class="toolbar">
+        <p class="week-label" id="huntWeek">Weekly hunt list</p>
+        <button type="button" class="btn primary" id="refreshHunt">Refresh list</button>
+      </div>
+      <p class="hint" id="huntHint"></p>
+      <p class="hint hidden" id="huntPrefetchHint"></p>
+      <div id="huntList" class="cards"></div>
+    </section>
+
+    <section id="view-rarity" class="view">
+      <div class="toolbar">
+        <input type="search" id="raritySearch" placeholder="Search rarity list…" aria-label="Search rarity list" />
+        <select id="rarityFilter" aria-label="Filter rarity category">
+          <option value="">All categories</option>
+          <option value="STH">Super Treasure Hunt</option>
+          <option value="TH">Treasure Hunt</option>
+          <option value="CHASE">Chase</option>
+          <option value="RLC">Red Line Club</option>
+          <option value="ERROR">Error / Variant</option>
+          <option value="HIGH">High value</option>
+        </select>
+        <button type="button" class="btn primary" id="addRarityBtn">Add rarity entry</button>
+        <button type="button" class="btn danger-ghost" id="resetRarityBtn">Reset to seed</button>
+      </div>
+      <p class="hint" id="raritySource"></p>
+      <p class="hint hidden" id="rarityPrefetchHint"></p>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Year</th>
+              <th>Color</th>
+              <th>Toy #</th>
+              <th>Series</th>
+              <th>Value (estimate)</th>
+              <th>Hunt</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="rarityTable"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="carModal" class="modal">
+    <form id="carForm" method="dialog">
+      <h2 id="carModalTitle">Add car</h2>
+      <input type="hidden" id="carId" />
+      <div id="carScanBanner" class="scan-banner hidden"></div>
+      <div class="form-grid">
+        <label>Name *<input id="fName" required maxlength="160" /></label>
+        <label>Series<input id="fSeries" maxlength="160" /></label>
+        <label>Year<input id="fYear" type="number" min="1968" max="2035" /></label>
+        <label>Color<input id="fColor" maxlength="80" /></label>
+        <label>Condition
+          <select id="fCondition">
+            <option value=""></option>
+          </select>
+        </label>
+        <label>Quantity<input id="fQty" type="number" min="1" max="9999" value="1" required /></label>
+        <label>Storage location<input id="fStorage" maxlength="160" placeholder="Bin, shelf, display…" /></label>
+        <label>Toy number<input id="fToy" maxlength="40" placeholder="e.g. JJM15" /></label>
+        <label>Collector #<input id="fCollector" maxlength="40" placeholder="e.g. 13/250" /></label>
+        <label>UPC / barcode<input id="fUpc" maxlength="20" inputmode="numeric" placeholder="From the card barcode" /></label>
+        <label>Casting<input id="fCasting" maxlength="160" placeholder="If different from the name" /></label>
+        <label class="full">Notes<textarea id="fNotes" rows="3" maxlength="2000"></textarea></label>
+        <div class="full photo-picker">
+          <div class="preview-row">
+            <div class="thumb lg" id="fImagePreview"></div>
+            <div class="photo-meta">
+              <p id="fImageCredit" class="attr"></p>
+              <div id="fImageSwitch" class="photo-switch hidden">
+                <label class="check"><input type="radio" name="fImagePref" value="stock" /> Stock photo</label>
+                <label class="check"><input type="radio" name="fImagePref" value="own" /> My photo</label>
+              </div>
+              <div class="photo-actions">
+                <button type="button" class="btn small" id="fFindStockBtn">Find stock photo</button>
+                <button type="button" class="btn small ghost hidden" id="fRepickStockBtn">Try another</button>
+              </div>
+            </div>
+          </div>
+          <label>Or upload your own photo<input id="fImageFile" type="file" accept="image/jpeg,image/png,image/gif,image/webp" /></label>
+          <input type="hidden" id="fImage" />
+          <input type="hidden" id="fOwnImage" />
+          <input type="hidden" id="fPendingPhoto" />
+          <input type="hidden" id="fStockImage" />
+          <input type="hidden" id="fStockSource" />
+          <input type="hidden" id="fStockPage" />
+          <input type="hidden" id="fStockAttr" />
+        </div>
+      </div>
+      <p class="form-error hidden" id="carFormError"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" value="cancel" id="carCancel">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="rarityModal" class="modal">
+    <form id="rarityForm" method="dialog">
+      <h2 id="rarityModalTitle">Add rarity entry</h2>
+      <input type="hidden" id="rId" />
+      <div class="form-grid">
+        <label>Name *<input id="rName" required maxlength="160" /></label>
+        <label>Category
+          <select id="rCategory" required>
+            <option value="STH">Super Treasure Hunt</option>
+            <option value="TH">Treasure Hunt</option>
+            <option value="CHASE">Chase</option>
+            <option value="RLC">Red Line Club</option>
+            <option value="ERROR">Error / Variant</option>
+            <option value="HIGH">High value</option>
+          </select>
+        </label>
+        <label>Year<input id="rYear" type="number" min="1968" max="2035" /></label>
+        <label>Color<input id="rColor" maxlength="80" /></label>
+        <label>Toy number<input id="rToy" maxlength="40" /></label>
+        <label>Collector #<input id="rCol" maxlength="40" placeholder="e.g. 13/250" /></label>
+        <label>Series<input id="rSeries" maxlength="160" /></label>
+        <label>Value estimate<input id="rValue" maxlength="80" placeholder="$25–120" /></label>
+        <label class="check"><input type="checkbox" id="rHunt" checked /> Include in weekly hunt list</label>
+        <label class="full">Notes<textarea id="rNotes" rows="3" maxlength="2000"></textarea></label>
+        <label class="full">Photo URL<input id="rImage" maxlength="500" placeholder="https://… or upload below" /></label>
+        <input type="hidden" id="rImageSource" />
+        <label class="full">Or upload a photo<input id="rImageFile" type="file" accept="image/jpeg,image/png,image/gif,image/webp" /></label>
+        <div class="full preview-row"><div class="thumb" id="rImagePreview"></div></div>
+      </div>
+      <p class="form-error hidden" id="rarityFormError"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="rarityCancel">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="scanModal" class="modal scan-modal">
+    <div class="scan-body">
+      <h2>Scan a car</h2>
+      <p class="hint">Point the camera at the card (front or back) and tap <strong>Identify with AI</strong>, or use the barcode / text scan. Nothing is saved until you confirm in the form.</p>
+      <div class="scan-preview">
+        <video id="scanVideo" autoplay muted playsinline></video>
+        <canvas id="scanCanvas" class="hidden"></canvas>
+        <img id="scanSnap" class="hidden" alt="Captured card" />
+      </div>
+      <p class="hint scan-status-line"><span id="scanSpinner" class="spinner hidden" aria-hidden="true"></span><span id="scanStatus">Starting camera…</span></p>
+      <div id="scanResults" class="scan-results hidden"></div>
+      <div class="modal-actions scan-controls">
+        <button type="button" class="btn primary hidden" id="scanAiBtn">Identify with AI</button>
+        <button type="button" class="btn" id="scanFrameBtn">Scan barcode / text</button>
+        <label class="btn ghost scan-file-btn">Take a photo<input id="scanFile" type="file" accept="image/*" capture="environment" hidden /></label>
+        <button type="button" class="btn ghost" id="scanCloseBtn">Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>
