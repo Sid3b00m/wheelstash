@@ -1,7 +1,8 @@
 services:
-  hotwheels:
+  wheelstash:
+    image: wheelstash:local
     build: .
-    container_name: hotwheels-tracker
+    container_name: wheelstash
     ports:
       - "${PORT:-3000}:3000"
     volumes:
@@ -12,7 +13,6 @@ services:
       TZ: ${TZ:-UTC}
       REFRESH_ENABLED: ${REFRESH_ENABLED:-true}
       REFRESH_CRON: ${REFRESH_CRON:-0 6 * * 1}
-      REFRESH_FANDOM: ${REFRESH_FANDOM:-false}
       # Optional AI photo recognition via a local Ollama. Leave OLLAMA_URL empty to disable.
       # If Ollama runs in another Compose service on the same network, use http://ollama:11434
       OLLAMA_URL: ${OLLAMA_URL:-}

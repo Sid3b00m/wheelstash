@@ -3,17 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hot Wheels Tracker</title>
+  <title>Wheelstash</title>
   <link rel="stylesheet" href="/styles.css" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect rx='12' width='64' height='64' fill='%23ff6a00'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-size='28' font-family='Arial Black,sans-serif' fill='white'%3EHW%3C/text%3E%3C/svg%3E" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect rx='14' width='64' height='64' fill='%231e3a5f'/%3E%3Crect x='14' y='16' width='36' height='8' rx='2' fill='%23e8eef6'/%3E%3Crect x='14' y='28' width='36' height='8' rx='2' fill='%2393c5c0'/%3E%3Crect x='14' y='40' width='22' height='8' rx='2' fill='%23e8eef6'/%3E%3C/svg%3E" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="logo" aria-hidden="true">HW</span>
+      <span class="logo" aria-hidden="true" title="">
+        <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true"><rect x="5" y="6" width="22" height="5" rx="1.5" fill="currentColor" opacity=".95"/><rect x="5" y="13.5" width="22" height="5" rx="1.5" fill="currentColor" opacity=".7"/><rect x="5" y="21" width="13" height="5" rx="1.5" fill="currentColor" opacity=".5"/></svg>
+      </span>
       <div>
-        <h1>Hot Wheels Tracker</h1>
-        <p class="tagline">Local collection catalog, rarity flags, and weekly hunt list</p>
+        <h1>Wheelstash</h1>
+        <p class="tagline">A self-hosted collection tracker for Hot Wheels collectors</p>
         <p class="tagline" id="lastRefresh">Last auto-refresh: never</p>
       </div>
     </div>
@@ -65,7 +67,6 @@
           <option value="storage:asc">Storage</option>
         </select>
         <div class="scan-actions">
-          <button type="button" class="btn ghost" id="fetchStockBtn" title="Look up a Hot Wheels Wiki photo for cars that don't have one yet">Fetch stock images</button>
           <button type="button" class="btn primary" id="addCarBtn">Add car</button>
           <button type="button" class="btn scan-btn" id="scanCarBtn">Scan</button>
           <form id="addByNumberForm" class="add-by-number">
@@ -104,7 +105,6 @@
         <button type="button" class="btn primary" id="refreshHunt">Refresh list</button>
       </div>
       <p class="hint" id="huntHint"></p>
-      <p class="hint hidden" id="huntPrefetchHint"></p>
       <div id="huntList" class="cards"></div>
     </section>
 
@@ -124,7 +124,6 @@
         <button type="button" class="btn danger-ghost" id="resetRarityBtn">Reset to seed</button>
       </div>
       <p class="hint" id="raritySource"></p>
-      <p class="hint hidden" id="rarityPrefetchHint"></p>
       <div class="table-wrap">
         <table class="grid">
           <thead>
@@ -173,25 +172,12 @@
           <div class="preview-row">
             <div class="thumb lg" id="fImagePreview"></div>
             <div class="photo-meta">
-              <p id="fImageCredit" class="attr"></p>
-              <div id="fImageSwitch" class="photo-switch hidden">
-                <label class="check"><input type="radio" name="fImagePref" value="stock" /> Stock photo</label>
-                <label class="check"><input type="radio" name="fImagePref" value="own" /> My photo</label>
-              </div>
-              <div class="photo-actions">
-                <button type="button" class="btn small" id="fFindStockBtn">Find stock photo</button>
-                <button type="button" class="btn small ghost hidden" id="fRepickStockBtn">Try another</button>
-              </div>
+              <label>Photo URL<input id="fImageUrl" maxlength="500" placeholder="https://…" /></label>
+              <label>Or upload a photo<input id="fImageFile" type="file" accept="image/jpeg,image/png,image/gif,image/webp" /></label>
             </div>
           </div>
-          <label>Or upload your own photo<input id="fImageFile" type="file" accept="image/jpeg,image/png,image/gif,image/webp" /></label>
           <input type="hidden" id="fImage" />
-          <input type="hidden" id="fOwnImage" />
           <input type="hidden" id="fPendingPhoto" />
-          <input type="hidden" id="fStockImage" />
-          <input type="hidden" id="fStockSource" />
-          <input type="hidden" id="fStockPage" />
-          <input type="hidden" id="fStockAttr" />
         </div>
       </div>
       <p class="form-error hidden" id="carFormError"></p>
@@ -259,6 +245,7 @@
     </div>
   </dialog>
 
+  <footer class="site-foot">Wheelstash is not affiliated with Mattel.</footer>
   <script src="/app.js"></script>
 </body>
 </html>

@@ -44,7 +44,7 @@ function carImage(car) {
 }
 
 function thumb(url, name, large = false) {
-  const label = escapeHtml((name || "HW").slice(0, 3).toUpperCase());
+  const label = escapeHtml((name || "?").slice(0, 2).toUpperCase());
   const cls = large ? "thumb lg" : "thumb";
   if (!url) return `<div class="${cls} thumb-placeholder" aria-hidden="true">${label}</div>`;
   return `<div class="${cls}"><img src="${escapeHtml(url)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'thumb-placeholder${large ? " lg" : ""}',textContent:'${label}'}))" /></div>`;
@@ -75,7 +75,6 @@ const state = {
   refresh: null,
   users: [],
   currentUserId: null,
-  stockPrefetch: null,
 };
 
 
@@ -154,7 +153,7 @@ function renderCarRow(car) {
   const image = carImage(car);
   const colNum = car.collectorNumber || car.effectiveCollectorNumber || "";
   return el(`<tr>
-    <td>${thumb(image, car.name)}${car.stockAttribution && car.imagePref !== "own" && car.stockImageUrl && car.imageUrl === car.stockImageUrl ? `<div class="attr">Wiki · CC-BY-SA</div>` : ""}</td>
+    <td>${thumb(image, car.name)}</td>
     <td><strong>${escapeHtml(car.name)}</strong>${car.casting && car.casting !== car.name ? `<div class="hint">${escapeHtml(car.casting)}</div>` : ""}</td>
     <td>${escapeHtml(car.series)}</td>
     <td>${escapeHtml(car.year ?? "")}</td>
@@ -217,7 +216,7 @@ function renderRarity() {
   const body = document.getElementById("rarityTable");
   body.innerHTML = items.map((item) => `<tr>
     <td>${thumb(item.imageUrl, item.name)}</td>
-    <td><strong>${escapeHtml(item.name)}</strong>${item.notes ? `<div class="hint">${escapeHtml(item.notes)}</div>` : ""}${item.imageAttribution ? `<div class="attr">${escapeHtml(item.imageAttribution)}</div>` : ""}</td>
+    <td><strong>${escapeHtml(item.name)}</strong>${item.notes ? `<div class="hint">${escapeHtml(item.notes)}</div>` : ""}</td>
     <td>${badges([item.category])}</td>
     <td>${escapeHtml(item.year ?? "")}</td>
     <td>${escapeHtml(item.color)}</td>
@@ -255,7 +254,6 @@ function renderHunt() {
     <p>${escapeHtml([item.year, item.color, item.series].filter(Boolean).join(" · "))}</p>
     <p>${item.toyNumber ? `Toy # ${escapeHtml(item.toyNumber)}` : ""}${item.collectorNumber ? ` · ${escapeHtml(item.collectorNumber)}` : ""}</p>
     <p>${item.valueEstimate ? `${escapeHtml(item.valueEstimate)} estimate` : ""}</p>
-    ${item.imageAttribution ? `<p class="attr">${escapeHtml(item.imageAttribution)}</p>` : ""}
   </article>`).join("");
 }
 
@@ -275,44 +273,10 @@ async function loadCars() {
   renderCars();
 }
 
-function renderPrefetchStatus(pf) {
-  state.stockPrefetch = pf || state.stockPrefetch;
-  const info = state.stockPrefetch;
-  const text = info?.running
-    ? `Loading stock thumbnails in background (${info.cached || 0}/${info.total || 0})…`
-    : "";
-  for (const id of ["huntPrefetchHint", "rarityPrefetchHint"]) {
-    const node = document.getElementById(id);
-    if (!node) continue;
-    node.textContent = text;
-    node.classList.toggle("hidden", !text);
-  }
-}
-
-let prefetchTimer = null;
-function schedulePrefetchPoll(pf) {
-  renderPrefetchStatus(pf);
-  if (!pf?.running) {
-    if (prefetchTimer) {
-      clearTimeout(prefetchTimer);
-      prefetchTimer = null;
-    }
-    return;
-  }
-  if (prefetchTimer) return;
-  prefetchTimer = setTimeout(async () => {
-    prefetchTimer = null;
-    try {
-      await Promise.all([loadRarity(), loadHunt()]);
-    } catch (_) { /* ignore transient poll errors */ }
-  }, 3500);
-}
-
 async function loadRarity() {
   const data = await api("/api/rarity");
   state.rarity = data;
   renderRarity();
-  schedulePrefetchPoll(data.stockPrefetch);
 }
 
 async function loadHunt() {
@@ -321,7 +285,6 @@ async function loadHunt() {
   if (state.hunt.refresh) state.refresh = state.hunt.refresh;
   formatRefresh(state.refresh);
   renderHunt();
-  schedulePrefetchPoll(data.stockPrefetch);
 }
 
 function fillConditions(select, current) {
@@ -350,82 +313,11 @@ async function uploadFile(input, urlField, previewId, sourceField) {
 }
 
 
-function photoPref() {
-  const checked = document.querySelector('input[name="fImagePref"]:checked');
-  return checked ? checked.value : "stock";
-}
-
 function syncCarPhotoUI() {
-  const stock = document.getElementById("fStockImage").value;
-  const own = document.getElementById("fOwnImage").value;
-  const pending = document.getElementById("fPendingPhoto")?.value || "";
-  const pref = photoPref();
-  const display = (pref === "own" && (own || pending))
-    ? (own || pending)
-    : (stock || own || pending || document.getElementById("fImage").value);
-  document.getElementById("fImage").value = display.startsWith("data:") ? (stock || "") : display;
-  setPreview("fImagePreview", display, document.getElementById("fName").value || "HW");
-  const credit = document.getElementById("fImageCredit");
-  const attr = document.getElementById("fStockAttr").value;
-  const page = document.getElementById("fStockPage").value;
-  if (stock && attr) {
-    credit.innerHTML = page
-      ? `<a href="${escapeHtml(page)}" target="_blank" rel="noopener">${escapeHtml(attr)}</a>`
-      : escapeHtml(attr);
-  } else if (own || pending) {
-    credit.textContent = "Your photo will be kept only if no stock image is found.";
-  } else {
-    credit.textContent = "";
-  }
-  const sw = document.getElementById("fImageSwitch");
-  sw.classList.toggle("hidden", !(stock && own));
-  document.getElementById("fRepickStockBtn").classList.toggle("hidden", !stock);
-}
-
-function applyStockToForm(stock) {
-  if (!stock) return;
-  document.getElementById("fStockImage").value = stock.stockImageUrl || "";
-  document.getElementById("fStockSource").value = stock.stockSourceUrl || "";
-  document.getElementById("fStockPage").value = stock.stockPageUrl || "";
-  document.getElementById("fStockAttr").value = stock.stockAttribution || "";
-  document.getElementById("fOwnImage").value = "";
-  document.getElementById("fPendingPhoto").value = "";
-  const stockRadio = document.querySelector('input[name="fImagePref"][value="stock"]');
-  if (stockRadio) stockRadio.checked = true;
-  syncCarPhotoUI();
-}
-
-async function findStockForForm({ repick = false } = {}) {
-  const btn = document.getElementById("fFindStockBtn");
-  const err = document.getElementById("carFormError");
-  btn.disabled = true;
-  const prev = btn.textContent;
-  btn.textContent = "Looking up…";
-  err.classList.add("hidden");
-  try {
-    const body = {
-      name: document.getElementById("fName").value,
-      series: document.getElementById("fSeries").value,
-      year: document.getElementById("fYear").value,
-      color: document.getElementById("fColor").value,
-      toyNumber: document.getElementById("fToy").value,
-    collectorNumber: document.getElementById("fCollector").value,
-      casting: document.getElementById("fCasting").value,
-    };
-    if (repick) {
-      const src = document.getElementById("fStockSource").value;
-      if (src) body.excludeUrls = [src];
-    }
-    const data = await api("/api/stock/lookup", { method: "POST", body: JSON.stringify(body) });
-    if (!data.found || !data.stock) throw new Error("No stock photo found on the Hot Wheels Wiki for this car.");
-    applyStockToForm(data.stock);
-  } catch (e) {
-    err.textContent = e.message;
-    err.classList.remove("hidden");
-  } finally {
-    btn.disabled = false;
-    btn.textContent = prev;
-  }
+  const pending = document.getElementById("fPendingPhoto").value;
+  const url = pending || document.getElementById("fImageUrl").value || document.getElementById("fImage").value;
+  document.getElementById("fImage").value = pending ? "" : (document.getElementById("fImageUrl").value || document.getElementById("fImage").value);
+  setPreview("fImagePreview", url, document.getElementById("fName").value || "car");
 }
 
 function renderScanBanner(html) {
@@ -457,26 +349,15 @@ function openCarModal(car, options = {}) {
   document.getElementById("fUpc").value = car?.upc || "";
   document.getElementById("fCasting").value = car?.casting || "";
   document.getElementById("fNotes").value = car?.notes || "";
-  document.getElementById("fImage").value = car?.imageUrl || "";
-  document.getElementById("fOwnImage").value = car?.ownImageUrl || "";
+  const existingPhoto = car?.imageUrl || car?.ownImageUrl || "";
+  document.getElementById("fImage").value = existingPhoto;
+  document.getElementById("fImageUrl").value = existingPhoto.startsWith("http") ? existingPhoto : "";
   document.getElementById("fPendingPhoto").value = options.pendingPhoto || car?.pendingPhoto || "";
-  document.getElementById("fStockImage").value = car?.stockImageUrl || "";
-  document.getElementById("fStockSource").value = car?.stockSourceUrl || "";
-  document.getElementById("fStockPage").value = car?.stockPageUrl || "";
-  document.getElementById("fStockAttr").value = car?.stockAttribution || "";
   document.getElementById("fImageFile").value = "";
-  const pref = car?.imagePref === "own" ? "own" : "stock";
-  const stockRadio = document.querySelector('input[name="fImagePref"][value="stock"]');
-  const ownRadio = document.querySelector('input[name="fImagePref"][value="own"]');
-  if (stockRadio) stockRadio.checked = pref !== "own";
-  if (ownRadio) ownRadio.checked = pref === "own";
   syncCarPhotoUI();
   document.getElementById("carFormError").classList.add("hidden");
   renderScanBanner(options.banner || "");
   dialog.showModal();
-  if (!car?.id && !car?.stockImageUrl && (car?.name || car?.toyNumber)) {
-    findStockForForm().catch(() => { /* form still works without a stock photo */ });
-  }
 }
 
 function openRarityModal(item) {
@@ -519,46 +400,23 @@ document.querySelectorAll(".tab").forEach((tab) => {
 });
 
 document.getElementById("addCarBtn").addEventListener("click", () => openCarModal(null));
-document.getElementById("fetchStockBtn").addEventListener("click", async () => {
-  const btn = document.getElementById("fetchStockBtn");
-  if (!confirm("Look up a Hot Wheels Wiki stock photo for every car in this collection that doesn't have one yet? This may take a minute.")) return;
-  btn.disabled = true;
-  const prev = btn.textContent;
-  btn.textContent = "Fetching…";
-  try {
-    const result = await api("/api/stock/backfill", {
-      method: "POST",
-      body: JSON.stringify({ userId: state.currentUserId }),
-    });
-    await loadCars();
-    alert(`Stock photos: ${result.filled} added, ${result.skipped} already had one, ${result.missing} not found.`);
-  } catch (err) {
-    alert(err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = prev;
-  }
-});
 document.getElementById("addRarityBtn").addEventListener("click", () => openRarityModal(null));
 document.getElementById("carCancel").addEventListener("click", () => { renderScanBanner(""); document.getElementById("carModal").close(); });
 document.getElementById("rarityCancel").addEventListener("click", () => document.getElementById("rarityModal").close());
-document.getElementById("fImageSwitch").addEventListener("change", syncCarPhotoUI);
-document.getElementById("fFindStockBtn").addEventListener("click", () => findStockForForm().catch(console.error));
-document.getElementById("fRepickStockBtn").addEventListener("click", () => findStockForForm({ repick: true }).catch(console.error));
 document.getElementById("rImage").addEventListener("input", (event) => {
   document.getElementById("rImageSource").value = event.target.value ? "user" : "";
-  setPreview("rImagePreview", event.target.value, "HW");
+  setPreview("rImagePreview", event.target.value, document.getElementById("rName").value || "item");
+});
+document.getElementById("fImageUrl").addEventListener("input", () => {
+  document.getElementById("fPendingPhoto").value = "";
+  document.getElementById("fImage").value = document.getElementById("fImageUrl").value.trim();
+  syncCarPhotoUI();
 });
 document.getElementById("fImageFile").addEventListener("change", async (event) => {
   const input = event.target;
   const file = input.files && input.files[0];
   input.value = "";
   if (!file) return;
-  if (document.getElementById("fStockImage").value) {
-    document.getElementById("carFormError").textContent = "A stock photo is already set, so the phone photo was not kept.";
-    document.getElementById("carFormError").classList.remove("hidden");
-    return;
-  }
   try {
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -567,7 +425,8 @@ document.getElementById("fImageFile").addEventListener("change", async (event) =
       reader.readAsDataURL(file);
     });
     document.getElementById("fPendingPhoto").value = dataUrl;
-    document.getElementById("fOwnImage").value = "";
+    document.getElementById("fImageUrl").value = "";
+    document.getElementById("fImage").value = "";
     syncCarPhotoUI();
   } catch (err) {
     document.getElementById("carFormError").textContent = err.message;
@@ -585,14 +444,11 @@ document.getElementById("carForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const id = document.getElementById("carId").value;
   const errBox = document.getElementById("carFormError");
-  const stockImageUrl = document.getElementById("fStockImage").value;
   const pending = document.getElementById("fPendingPhoto").value;
-  let ownImageUrl = document.getElementById("fOwnImage").value;
-  if (stockImageUrl) {
-    ownImageUrl = "";
-  } else if (pending && pending.startsWith("data:")) {
+  let imageUrl = document.getElementById("fImageUrl").value.trim() || document.getElementById("fImage").value.trim();
+  if (pending && pending.startsWith("data:")) {
     try {
-      ownImageUrl = await uploadScanPhoto(pending);
+      imageUrl = await uploadScanPhoto(pending);
     } catch (err) {
       errBox.textContent = err.message;
       errBox.classList.remove("hidden");
@@ -608,16 +464,11 @@ document.getElementById("carForm").addEventListener("submit", async (event) => {
     quantity: document.getElementById("fQty").value,
     storageLocation: document.getElementById("fStorage").value,
     toyNumber: document.getElementById("fToy").value,
+    collectorNumber: document.getElementById("fCollector").value,
     casting: document.getElementById("fCasting").value,
     notes: document.getElementById("fNotes").value,
-    imageUrl: stockImageUrl || ownImageUrl || document.getElementById("fImage").value,
-    ownImageUrl,
-    stockImageUrl,
-    stockSourceUrl: document.getElementById("fStockSource").value,
-    stockPageUrl: document.getElementById("fStockPage").value,
-    stockAttribution: document.getElementById("fStockAttr").value,
-    imagePref: stockImageUrl ? "stock" : photoPref(),
-    fetchStock: !stockImageUrl,
+    imageUrl,
+    ownImageUrl: imageUrl,
     upc: document.getElementById("fUpc").value,
     userId: state.currentUserId,
   };
@@ -948,7 +799,7 @@ function prefillFromLookup(result, options = {}) {
     }, {
       title: "Add another?",
       banner: [options.extraBanner, candidateBanner(result, owned)].filter(Boolean).join(" "),
-      pendingPhoto: !owned.stockImageUrl && imageUrl && String(imageUrl).startsWith("data:") ? imageUrl : "",
+      pendingPhoto: imageUrl && String(imageUrl).startsWith("data:") ? imageUrl : "",
     });
     return;
   }
@@ -962,8 +813,7 @@ function prefillFromLookup(result, options = {}) {
     upc: base.upc || result.query?.upc || "",
     casting: base.casting || "",
     imageUrl: imageUrl && !String(imageUrl).startsWith("data:") ? imageUrl : "",
-    ownImageUrl: imageUrl && String(imageUrl).startsWith("/uploads/") ? imageUrl : "",
-    imagePref: "stock",
+    imageUrl: imageUrl && !String(imageUrl).startsWith("data:") ? imageUrl : "",
     quantity: 1,
   }, {
     title: "Add car",

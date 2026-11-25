@@ -1,18 +1,18 @@
 [Unit]
-Description=Hot Wheels collection tracker
+Description=Wheelstash collection tracker
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=hotwheels
-Group=hotwheels
-WorkingDirectory=/opt/hotwheels-tracker
-EnvironmentFile=-/etc/hotwheels-tracker.env
+User=wheelstash
+Group=wheelstash
+WorkingDirectory=/opt/wheelstash
+EnvironmentFile=-/etc/wheelstash.env
 Environment=NODE_ENV=production
 Environment=HOST=0.0.0.0
 Environment=PORT=3000
-Environment=DATA_DIR=/opt/hotwheels-tracker/storage
+Environment=DATA_DIR=/opt/wheelstash/storage
 # Node may be /usr/bin/node or /usr/local/bin/node depending on how you installed it.
 ExecStart=/usr/bin/env node server.js
 Restart=on-failure

@@ -1,5 +1,5 @@
 # Example Compose file for a TrueNAS SCALE custom app.
-# Replace /mnt/POOL/hotwheels with your dataset path. The apps user is usually 568:568.
+# Replace /mnt/POOL/wheelstash with your dataset path. The apps user is usually 568:568.
 # Host networking is optional; it makes the published port appear on the TrueNAS host
 # (handy if you also run the TrueNAS Tailscale app with host networking).
 #
@@ -7,7 +7,7 @@
 # (or use the equivalent JSON in truenas-app.json with the TrueNAS API).
 
 services:
-  hotwheels:
+  wheelstash:
     image: node:22-bookworm-slim
     user: "568:568"
     working_dir: /app
@@ -18,7 +18,7 @@ services:
       - -c
       - |
         set -e
-        R=/srv/release/hotwheels-tracker-release.tgz
+        R=/srv/release/wheelstash-release.tgz
         if [ -f "$$R" ]; then
           SUM=$$(md5sum < "$$R")
           if [ "$$(cat /app/.release 2>/dev/null)" != "$$SUM" ]; then
@@ -38,16 +38,15 @@ services:
       TZ: UTC
       REFRESH_ENABLED: "true"
       REFRESH_CRON: "0 6 * * 1"
-      REFRESH_FANDOM: "false"
       OLLAMA_URL: http://127.0.0.1:11434
       OLLAMA_VISION_MODEL: qwen2.5vl:7b
       AI_SCAN_ENABLED: "true"
       AI_SCAN_TIMEOUT_MS: "90000"
       DEFAULT_USER_NAME: Collector
     volumes:
-      - /mnt/POOL/hotwheels/app:/app
-      - /mnt/POOL/hotwheels/storage:/data
-      - /mnt/POOL/hotwheels/release:/srv/release:ro
+      - /mnt/POOL/wheelstash/app:/app
+      - /mnt/POOL/wheelstash/storage:/data
+      - /mnt/POOL/wheelstash/release:/srv/release:ro
     healthcheck:
       test:
         - CMD

@@ -1,6 +1,8 @@
-# Hot Wheels Tracker
+# Wheelstash
 
-A self-hosted web app for cataloging a Hot Wheels collection, flagging rare or valuable cars, and generating a weekly in-store hunt list. It runs entirely on your machine. There are no paid services. An optional lookup can pull stock photos from the official Hot Wheels Wiki MediaWiki API (CC-BY-SA, with attribution).
+Wheelstash is a self-hosted collection tracker for Hot Wheels collectors. It catalogs cars, flags rare or valuable finds, and generates a weekly in-store hunt list. It runs entirely on your machine. There are no paid services.
+
+This project is unofficial and is not affiliated with, endorsed by, or sponsored by Mattel.
 
 This app is intended for a local or trusted network (for example your LAN or a tailnet). It has no login or access control.
 
@@ -15,7 +17,7 @@ This app is intended for a local or trusted network (for example your LAN or a t
 - **Collection catalog** with name, series, year, color, condition, quantity, storage location, optional notes, toy number, UPC, and casting. Search, rarity filters, and sorting. By default the list is grouped by series and ordered by series number (for example 3/10 before 7/10).
 - **Rarity flags.** Collection entries are auto-matched to a curated rarity list by toy number, or by name + year. Matches show badges (STH, TH, Chase, RLC, Error, High Value) and estimate ranges.
 - **Weekly hunt list** of recent Super Treasure Hunts, Treasure Hunts, and Premium/Car Culture chases the selected user does not already own. Cached per ISO week, with a Refresh button and a scheduled weekly auto-refresh.
-- **Stock photos** from the Hot Wheels Wiki, cached under `storage/stock/` with a CC-BY-SA credit. Phone photos used only to identify a car are deleted once a stock image is found.
+- **Photos** you upload or paste as a URL on a collection or rarity entry. Hunt and rarity rows show a placeholder unless you provide an image.
 - **Dark / light theme** toggle, remembered in `localStorage`.
 - **CSV and JSON export** of the collection (JSON also includes the rarity list).
 
@@ -27,7 +29,7 @@ This app is intended for a local or trusted network (for example your LAN or a t
 ## Quick start (Node)
 
 ```bash
-cd hotwheels-tracker
+cd wheelstash
 cp .env.example .env   # optional; edit as needed
 npm install
 npm start
@@ -45,7 +47,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ## Quick start (Docker)
 
 ```bash
-cd hotwheels-tracker
+cd wheelstash
 cp .env.example .env   # optional
 docker compose up -d --build
 ```
@@ -65,8 +67,7 @@ All writable data lives in the `storage/` directory (or `DATA_DIR`):
 | `storage/hunt-cache.json` | Cached hunt list for the current ISO week |
 | `storage/refresh-state.json` | Last auto-refresh time, trigger, and job log |
 | `storage/seed-snapshot.json` | Seed snapshot used to preserve your rarity edits on the next merge |
-| `storage/uploads/` | Photos you upload in the UI (kept only when no stock photo is found) |
-| `storage/stock/` | Cached Hot Wheels Wiki stock thumbnails |
+| `storage/uploads/` | Photos you upload in the UI |
 
 The original seed is never overwritten: `seed/rarity-seed.json` (113 Treasure Hunt / Super Treasure Hunt / premium chase entries for 2024–2026, plus source credits). See [docs/SETUP.md](docs/SETUP.md#the-113-car-rarity-dataset) for how first-run seeding, editing, and reset work.
 
@@ -82,7 +83,6 @@ Copy [`.env.example`](.env.example) to `.env` or export the variables in your se
 | `TZ` | unset (Docker: `UTC`) | Timezone for the weekly cron |
 | `REFRESH_ENABLED` | `true` | Weekly scheduler and startup run |
 | `REFRESH_CRON` | `0 6 * * 1` | Cron expression (Monday 06:00 in `TZ`) |
-| `REFRESH_FANDOM` | `false` | Auto-fill missing *rarity list* photos from the wiki |
 | `OLLAMA_URL` | *(empty → AI off)* | Base URL of Ollama, e.g. `http://127.0.0.1:11434` or `http://ollama:11434` |
 | `OLLAMA_VISION_MODEL` | `qwen2.5vl:7b` | Ollama vision model name |
 | `AI_SCAN_ENABLED` | `true` | Set `false` to hide the AI button |
@@ -97,11 +97,12 @@ Browsers only allow the live camera preview in a [secure context](https://develo
 
 ## Photos and the rarity list
 
-The shipped seed is **names and catalog facts only**. It does not include car photos.
+The shipped seed is **names and catalog facts only**. It does not include car photos. You can upload a JPEG, PNG, GIF, or WebP (saved under `storage/uploads/`, max 4 MB) or paste an image URL on a collection or rarity entry. Uploaded photos are kept. Hunt and rarity rows show a placeholder unless you add a photo yourself.
 
-- Collection and hunt/rare-list thumbnails are looked up on the [Hot Wheels Wiki](https://hotwheels.fandom.com/) via its MediaWiki API, cached under `storage/stock/`, and shown with a short **CC-BY-SA / Hot Wheels Wiki** credit. Casting-page fallbacks may show a different year's variant of the same car.
-- Phone and upload photos are used to identify the car. Once a stock photo is attached, the phone photo is deleted to save space. If no stock photo is found, the phone photo is kept.
-- Community sites such as Vanto and Hunt64 are used only as *identity* sources for the seed; this app does not scrape their photos.
+Word of the wise: pulling images or data from the Hot Wheels wikis is possible, but use at your own risk.
+
+Community sites such as Vanto and Hunt64 are used only as *identity* sources for the seed; this app does not scrape their photos.
+
 
 Dollar figures in the seed are **rough estimate ranges only**, not live market prices or appraisals. There is no free official live-price feed. Confirm with current sold listings before buying or selling.
 
@@ -119,18 +120,16 @@ Copy the whole `storage/` folder (stop the app first for a fully consistent SQLi
 
 ## License
 
-The application code is licensed under the [MIT License](LICENSE).
+The application code is licensed under the [GNU General Public License v3.0 or later](LICENSE).
 
 Hot Wheels and related marks are trademarks of Mattel, Inc. This project is unofficial and is not affiliated with Mattel.
-
-Images fetched from the Hot Wheels Wiki are **CC-BY-SA** community content and are *not* covered by the MIT license. Keep the in-app attribution if you share screenshots or copies of those images.
 
 ## Project layout
 
 ```
-hotwheels-tracker/
+wheelstash/
   server.js              API and static file server
-  lib/                   Database, rarity, scan, AI, stock photos, hunt, refresh
+  lib/                   Database, rarity, scan, AI, photos, hunt, refresh
   seed/rarity-seed.json  Shipped 113-car rarity seed (with source credits)
   public/                Vanilla HTML/CSS/JS UI
   public/vendor/         Local ZXing + tesseract.js assets (no CDN)

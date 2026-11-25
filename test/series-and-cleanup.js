@@ -7,7 +7,7 @@ const path = require("node:path");
 
 const seriesLib = require("../lib/series");
 const dbLib = require("../lib/db");
-const stockLib = require("../lib/stock");
+const photos = require("../lib/photos");
 const huntLib = require("../lib/hunt");
 const rarityLib = require("../lib/rarity");
 
@@ -66,60 +66,36 @@ assert.deepEqual(jImports.map((c) => c.name), [
 assert.equal(grouped[grouped.length - 1].seriesGroup, "No series");
 assert.equal(grouped[grouped.length - 1].name, "No Series Car");
 
-// 2. Photo cleanup: keep own photo when no stock exists, purge when stock exists, purge orphans & stale upc_map
+// 2. User photos are kept on the car and on disk
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "hw-cleanup-"));
 const db = dbLib.openDatabase(tmp);
-const uploads = stockLib.uploadDir(tmp);
-const stockDir = stockLib.stockDir(tmp);
-fs.writeFileSync(path.join(uploads, "car-with-stock.jpg"), Buffer.alloc(1200, 1));
-fs.writeFileSync(path.join(uploads, "car-no-stock.jpg"), Buffer.alloc(2400, 2));
-fs.writeFileSync(path.join(uploads, "orphan-scan.jpg"), Buffer.alloc(3600, 3));
-fs.writeFileSync(path.join(stockDir, "stock-abc123.webp"), Buffer.alloc(500, 4));
+const uploads = photos.uploadDir(tmp);
+fs.writeFileSync(path.join(uploads, "car-photo.jpg"), Buffer.alloc(2400, 2));
 
 const c1 = dbLib.createCar(db, {
   name: "Mini Cooper S",
   userId: 1,
   upc: "887961234567",
-  ownImageUrl: "/uploads/car-with-stock.jpg",
-  stockImageUrl: "",
-  imagePref: "own",
+  ownImageUrl: "/uploads/car-photo.jpg",
 });
-// Simulate later attaching stock image via setCarStock (legacy state before cleanup)
-dbLib.setCarStock(db, c1.id, { stockImageUrl: "/stock/stock-abc123.webp" }, { imagePref: "stock", clearOwn: false });
+assert.equal(dbLib.getCar(db, c1.id).imageUrl, "/uploads/car-photo.jpg");
+assert.equal(dbLib.getCar(db, c1.id).ownImageUrl, "/uploads/car-photo.jpg");
+assert.equal(fs.existsSync(path.join(uploads, "car-photo.jpg")), true);
+assert.equal(dbLib.listUpcMaps(db)[0].image_url, "/uploads/car-photo.jpg");
 
-const c2 = dbLib.createCar(db, {
-  name: "Mystery Car",
-  userId: 1,
-  ownImageUrl: "/uploads/car-no-stock.jpg",
-  imagePref: "own",
-});
-
-const cleanup = stockLib.cleanupOwnPhotos(dbLib, db, tmp);
-assert.equal(cleanup.carsCleared.length, 1);
-assert.equal(cleanup.carsCleared[0].name, "Mini Cooper S");
-assert.equal(cleanup.orphansDeleted.length, 1);
-assert.equal(cleanup.orphansDeleted[0].name, "orphan-scan.jpg");
-assert.equal(cleanup.freed, 1200 + 3600);
-assert.equal(fs.existsSync(path.join(uploads, "car-with-stock.jpg")), false);
-assert.equal(fs.existsSync(path.join(uploads, "orphan-scan.jpg")), false);
-assert.equal(fs.existsSync(path.join(uploads, "car-no-stock.jpg")), true);
-assert.equal(dbLib.getCar(db, c1.id).ownImageUrl, "");
-assert.equal(dbLib.getCar(db, c2.id).ownImageUrl, "/uploads/car-no-stock.jpg");
-assert.equal(dbLib.listUpcMaps(db)[0].image_url, "");
-
-// 3. Hunt hydration from rarity items (even when hunt-cache already exists without images)
+// 3. Hunt list shows only user-provided rarity images, including from a cached list
 const rarity = rarityLib.loadRarity(tmp, path.join(__dirname, "..", "seed", "rarity-seed.json"));
 const hunt1 = huntLib.getHuntList(tmp, rarity, [], { force: true, userId: 1 });
 assert.ok(hunt1.items.length > 0);
 assert.ok(!hunt1.items[0].imageUrl);
 const targetId = hunt1.items[0].id;
 const rItem = rarity.items.find((i) => i.id === targetId);
-rItem.imageUrl = "/stock/stock-abc123.webp";
-rItem.imageSource = "fandom";
+rItem.imageUrl = "/uploads/car-photo.jpg";
+rItem.imageSource = "user";
 rarityLib.saveRarity(tmp, rarity);
 const hunt2 = huntLib.getHuntList(tmp, rarity, [], { force: false, userId: 1 });
 assert.equal(hunt2.cached, true);
-assert.equal(hunt2.items[0].imageUrl, "/stock/stock-abc123.webp");
+assert.equal(hunt2.items[0].imageUrl, "/uploads/car-photo.jpg");
 
 db.close();
 fs.rmSync(tmp, { recursive: true, force: true });

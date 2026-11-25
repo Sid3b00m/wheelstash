@@ -1,6 +1,6 @@
-# Setup guide
+# Wheelstash setup guide
 
-This is the full install and operations guide for the self-hosted Hot Wheels collection tracker. The [README](../README.md) covers features and a short quick start. This document covers prerequisites, every environment variable, data layout, the optional Ollama vision model, HTTPS for the phone camera, the weekly refresh, the 113-car rarity seed, backup and restore, and step-by-step installs on:
+This is the full install and operations guide for Wheelstash, a self-hosted collection tracker for Hot Wheels collectors. This project is unofficial and is not affiliated with, endorsed by, or sponsored by Mattel. The [README](../README.md) covers features and a short quick start. This document covers prerequisites, every environment variable, data layout, the optional Ollama vision model, HTTPS for the phone camera, the weekly refresh, the 113-car rarity seed, backup and restore, and step-by-step installs on:
 
 - TrueNAS SCALE (custom app via Docker Compose, with a dataset)
 - Proxmox (an LXC container running Node 22, or Docker inside a VM)
@@ -9,7 +9,7 @@ This is the full install and operations guide for the self-hosted Hot Wheels col
 
 The app has **no login or access control**. Run it only on a trusted LAN or a tailnet, or put it behind your own authentication proxy.
 
-Throughout this guide, placeholders look like `/mnt/POOL/hotwheels`, `your-host`, and `your-tailnet.ts.net`. Replace them with your own names and paths.
+Throughout this guide, placeholders look like `/mnt/POOL/wheelstash`, `your-host`, and `your-tailnet.ts.net`. Replace them with your own names and paths.
 
 ## Prerequisites
 
@@ -29,23 +29,22 @@ Optional:
 Clone or copy the project, then work from the repo root:
 
 ```bash
-cd hotwheels-tracker
+cd wheelstash
 cp .env.example .env   # optional; edit values described below
 ```
 
 ## Environment variables
 
-The process reads these directly. With Docker Compose, values in `.env` are also substituted into `docker-compose.yml`. A systemd unit can load the same file with `EnvironmentFile=/etc/hotwheels-tracker.env`.
+The process reads these directly. With Docker Compose, values in `.env` are also substituted into `docker-compose.yml`. A systemd unit can load the same file with `EnvironmentFile=/etc/wheelstash.env`.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `HOST` | `0.0.0.0` | Address the HTTP server binds to. `0.0.0.0` is reachable on your LAN. Use `127.0.0.1` if only a local reverse proxy should connect. |
 | `PORT` | `3000` | Listen port. In the default Compose file this is the port *inside* the container; the host port is `${PORT:-3000}` on the left of the ports mapping. |
-| `DATA_DIR` | `./storage` (image: `/app/storage`) | Directory for the SQLite database, rarity/hunt state, uploads, and the stock-photo cache. Must be writable by the process user. |
+| `DATA_DIR` | `./storage` (image: `/app/storage`) | Directory for the SQLite database, rarity/hunt state, and uploads. Must be writable by the process user. |
 | `TZ` | unset (Docker image / Compose: `UTC`) | Timezone for the weekly cron, as an IANA name such as `UTC`, `America/Chicago`, or `Europe/London`. If unset on a plain Node process, the job uses the host's local time. |
 | `REFRESH_ENABLED` | `true` | Set `false` to disable the scheduled weekly job *and* the startup catch-up run. Manual Refresh in the UI still works. |
 | `REFRESH_CRON` | `0 6 * * 1` | Standard 5-field cron. The default is Monday 06:00 in `TZ`. |
-| `REFRESH_FANDOM` | `false` | Set `true` to fill *missing rarity-list* photos from the Hot Wheels Wiki during each weekly job (CC-BY-SA, with attribution). Collection stock photos are fetched separately when you add a car, and do not require this flag. |
 | `OLLAMA_URL` | *(empty)* | Base URL of an Ollama server, with no trailing slash. Examples: `http://127.0.0.1:11434`, `http://ollama:11434` (Compose service name), or `http://your-ollama-host:11434`. Leave empty to disable AI. Do not expose Ollama to the public internet. |
 | `OLLAMA_VISION_MODEL` | `qwen2.5vl:7b` | Model name as shown by `ollama list`. It must have vision capability. Pull it with `ollama pull qwen2.5vl:7b`. |
 | `AI_SCAN_ENABLED` | `true` | Set `false` to hide the Identify with AI button even if `OLLAMA_URL` is set. |
@@ -87,8 +86,7 @@ That host folder is the only state you need to back up. Do not mount over `/app`
 | `hunt-cache.json` | Cached hunt list for the current ISO week, per user. |
 | `refresh-state.json` | Last auto-refresh time, trigger, and a short job log. |
 | `seed-snapshot.json` | Snapshot used so the weekly merge can keep your edits. |
-| `uploads/` | Photos uploaded in the UI. A phone photo is deleted once a stock image is found. |
-| `stock/` | Cached Hot Wheels Wiki thumbnails (not in git). |
+| `uploads/` | Photos uploaded in the UI. |
 
 The shipped seed file `seed/rarity-seed.json` lives in the app directory, not in `DATA_DIR`, and is never overwritten by the app.
 
@@ -97,7 +95,7 @@ The shipped seed file `seed/rarity-seed.json` lives in the app directory, not in
 ### Docker Compose
 
 ```bash
-cd hotwheels-tracker
+cd wheelstash
 cp .env.example .env
 # edit TZ, OLLAMA_URL, and so on if you want
 docker compose up -d --build
@@ -108,7 +106,7 @@ Open `http://localhost:3000` (or `http://your-host:3000` on the LAN). Logs: `doc
 ### Plain Node
 
 ```bash
-cd hotwheels-tracker
+cd wheelstash
 npm install
 npm test          # optional
 npm start         # or: npm run dev
@@ -138,7 +136,9 @@ The weekly job (and **Refresh** / `POST /api/refresh`) *merges* the current seed
 2. **As a file** — stop the server, edit `storage/rarity.json`, then start it again.
 3. **Replace the shipped seed** — edit `seed/rarity-seed.json` (or swap in your own file with the same shape), then use **Reset to seed** so `rarity.json` is rebuilt from it. Keep a backup of `storage/` first if you care about custom entries.
 
-Hunt and rarity *photos* are not in the seed. The app fetches them from the wiki on demand (and can prefetch thumbnails on startup). Set `REFRESH_FANDOM=true` if you also want the weekly job to fill missing *rarity-list* image URLs.
+Hunt and rarity photos are not in the seed. Add your own upload or image URL if you want a picture; otherwise a placeholder is shown.
+
+Word of the wise: pulling images or data from the Hot Wheels wikis is possible, but use at your own risk.
 
 ## Optional Ollama vision AI
 
@@ -226,8 +226,6 @@ The job does **not** pull current market prices. It:
 
 1. Re-merges `seed/rarity-seed.json` into `storage/rarity.json`, as described above.
 2. Regenerates the weekly hunt list from that rarity list and each collector's collection.
-3. Optionally, if `REFRESH_FANDOM=true`, fills missing rarity photos from the wiki. This fails gracefully if the wiki is unreachable.
-
 The header shows **Last auto-refresh** (timestamp, ISO week, and whether it was a startup, cron, or manual run).
 
 You can also trigger the same job with `POST /api/refresh` and inspect the last run with `GET /api/refresh`. Disable scheduling with `REFRESH_ENABLED=false`.
@@ -242,16 +240,16 @@ Back up the entire `DATA_DIR` (by default `storage/`):
 # Consistent copy: stop the app first so SQLite is quiet.
 # Docker:
 docker compose stop
-tar czf hotwheels-storage-$(date +%F).tgz -C storage .
+tar czf wheelstash-storage-$(date +%F).tgz -C storage .
 docker compose start
 
 # systemd:
-sudo systemctl stop hotwheels
-sudo tar czf /var/backups/hotwheels-storage-$(date +%F).tgz -C /opt/hotwheels-tracker/storage .
-sudo systemctl start hotwheels
+sudo systemctl stop wheelstash
+sudo tar czf /var/backups/wheelstash-storage-$(date +%F).tgz -C /opt/wheelstash/storage .
+sudo systemctl start wheelstash
 ```
 
-If you cannot stop the app, copy `collection.db`, `collection.db-wal`, and `collection.db-shm` together, plus the JSON files and the `uploads/` and `stock/` directories. A snapshot-capable filesystem (ZFS, btrfs, LVM) is the most reliable way to capture a running SQLite database.
+If you cannot stop the app, copy `collection.db`, `collection.db-wal`, and `collection.db-shm` together, plus the JSON files and the `uploads/` directory. A snapshot-capable filesystem (ZFS, btrfs, LVM) is the most reliable way to capture a running SQLite database.
 
 The seed file in the repo is not required for restore — a backup of `rarity.json` already contains your list. Keep a copy of the app release you were running as well, so you can roll back code and data together.
 
@@ -262,17 +260,17 @@ The seed file in the repo is not required for restore — a backup of `rarity.js
 docker compose stop
 rm -rf storage
 mkdir storage
-tar xzf hotwheels-storage-YYYY-MM-DD.tgz -C storage
+tar xzf wheelstash-storage-YYYY-MM-DD.tgz -C storage
 docker compose start
 ```
 
-For systemd, stop the service, replace `/opt/hotwheels-tracker/storage`, fix ownership (`chown -R hotwheels:hotwheels ...`), and start the service. Opening the UI should show the same collectors and cars.
+For systemd, stop the service, replace `/opt/wheelstash/storage`, fix ownership (`chown -R wheelstash:wheelstash ...`), and start the service. Opening the UI should show the same collectors and cars.
 
 Export CSV / JSON from the header (or `/api/export.csv` and `/api/export.json`) is a good extra copy of the catalog, but it is not a full backup (it does not include all rarity edits, the photo cache, or learned barcodes).
 
 Platform snapshots:
 
-- **TrueNAS:** a periodic snapshot task on the `POOL/hotwheels` dataset (or at least the `storage` child).
+- **TrueNAS:** a periodic snapshot task on the `POOL/wheelstash` dataset (or at least the `storage` child).
 - **Proxmox LXC:** `vzdump <CTID> --mode snapshot` (or `stop`) to the backup storage you use for other containers.
 - **Proxmox VM running Docker:** a VM backup, plus the `storage/` bind mount if it lives on a host path.
 
@@ -282,20 +280,20 @@ These steps assume TrueNAS SCALE (or a current Community Edition) with the Apps 
 
 ### 1. Create a dataset
 
-In the UI: **Datasets**, pick your pool, **Add Dataset**, name it `hotwheels`. Recommended layout:
+In the UI: **Datasets**, pick your pool, **Add Dataset**, name it `wheelstash`. Recommended layout:
 
 ```
-/mnt/POOL/hotwheels/app        # unpacked application (owned by the apps user)
-/mnt/POOL/hotwheels/storage    # all persistent data
-/mnt/POOL/hotwheels/release    # optional: a release tarball the container installs from
+/mnt/POOL/wheelstash/app        # unpacked application (owned by the apps user)
+/mnt/POOL/wheelstash/storage    # all persistent data
+/mnt/POOL/wheelstash/release    # optional: a release tarball the container installs from
 ```
 
 The Apps service typically runs containers as user `apps` (uid/gid **568**). Give that user ownership:
 
 ```bash
-mkdir -p /mnt/POOL/hotwheels/{app,storage,release}
-chown -R 568:568 /mnt/POOL/hotwheels
-chmod 755 /mnt/POOL/hotwheels /mnt/POOL/hotwheels/{app,storage,release}
+mkdir -p /mnt/POOL/wheelstash/{app,storage,release}
+chown -R 568:568 /mnt/POOL/wheelstash
+chmod 755 /mnt/POOL/wheelstash /mnt/POOL/wheelstash/{app,storage,release}
 ```
 
 ### 2. Put a release on the dataset (recommended)
@@ -304,18 +302,18 @@ On a machine with Node 22 and this repo:
 
 ```bash
 npm ci --omit=dev
-tar czf hotwheels-tracker-release.tgz \
+tar czf wheelstash-release.tgz \
   --exclude .git --exclude storage --exclude docs \
   server.js lib seed public package.json package-lock.json node_modules
 ```
 
-Copy `hotwheels-tracker-release.tgz` to `/mnt/POOL/hotwheels/release/` (SMB, SCP, or the TrueNAS shell).
+Copy `wheelstash-release.tgz` to `/mnt/POOL/wheelstash/release/` (SMB, SCP, or the TrueNAS shell).
 
 Alternatively, skip the tarball and `docker compose` build from the repo, mounting only `storage/`. The example files under `deploy/` follow the tarball-plus-official-Node-image pattern so you do not have to maintain a custom image on the NAS.
 
 ### 3. Install the custom app
 
-**Apps → Discover → Custom App.** Paste the YAML from [`deploy/truenas-compose.yml`](../deploy/truenas-compose.yml), after you replace every `/mnt/POOL/hotwheels` path with your dataset. The same content is in [`deploy/truenas-app.json`](../deploy/truenas-app.json) if you use the TrueNAS API.
+**Apps → Discover → Custom App.** Paste the YAML from [`deploy/truenas-compose.yml`](../deploy/truenas-compose.yml), after you replace every `/mnt/POOL/wheelstash` path with your dataset. The same content is in [`deploy/truenas-app.json`](../deploy/truenas-app.json) if you use the TrueNAS API.
 
 Review before saving:
 
@@ -329,9 +327,9 @@ Start the app and open `http://your-truenas-host:3000` (or whichever port you ch
 
 ### 4. Updates and backups
 
-To update the tarball pattern: copy a new `hotwheels-tracker-release.tgz` over the old one and **Restart** the app. The container compares a checksum, replaces `/app`, and leaves `/data` (your `storage` dataset) alone.
+To update the tarball pattern: copy a new `wheelstash-release.tgz` over the old one and **Restart** the app. The container compares a checksum, replaces `/app`, and leaves `/data` (your `storage` dataset) alone.
 
-Back up by snapshotting `POOL/hotwheels` (or the `storage` child) under **Data Protection**, and/or by copying `/mnt/POOL/hotwheels/storage`.
+Back up by snapshotting `POOL/wheelstash` (or the `storage` child) under **Data Protection**, and/or by copying `/mnt/POOL/wheelstash/storage`.
 
 For HTTPS and the camera, install or use the TrueNAS Tailscale app (typically with host networking) and run Serve as in [HTTPS for camera access](#https-for-camera-access), pointing at `http://127.0.0.1:3000` (or your chosen port). Use `https://your-host.your-tailnet.ts.net:8443/` from tailnet devices.
 
@@ -341,7 +339,7 @@ Two supported shapes: an unprivileged LXC running Node 22, or a small VM running
 
 ### Option A — LXC with Node 22
 
-1. **Create an unprivileged container** from a Debian 12 or Debian 13 (or Ubuntu 24.04) template. Give it a hostname such as `hotwheels`, 1–2 cores, 1 GB RAM, and a disk of 8 GB or more. Attach it to your LAN bridge with a **static** address you have confirmed is unused, for example `192.168.1.50/24` with your actual gateway and DNS. (DHCP is fine if you reserve the lease.) Nesting is useful but not required unless you also run Docker inside the CT.
+1. **Create an unprivileged container** from a Debian 12 or Debian 13 (or Ubuntu 24.04) template. Give it a hostname such as `wheelstash`, 1–2 cores, 1 GB RAM, and a disk of 8 GB or more. Attach it to your LAN bridge with a **static** address you have confirmed is unused, for example `192.168.1.50/24` with your actual gateway and DNS. (DHCP is fine if you reserve the lease.) Nesting is useful but not required unless you also run Docker inside the CT.
 2. **Install Node 22** inside the container. The Node 20 package in some Debian repos is not new enough. From the official tarball (check [nodejs.org](https://nodejs.org) for the current 22.x filename):
 
    ```bash
@@ -358,30 +356,30 @@ Two supported shapes: an unprivileged LXC running Node 22, or a small VM running
 3. **Create a service user and install the app:**
 
    ```bash
-   useradd --system --home /opt/hotwheels-tracker --shell /usr/sbin/nologin hotwheels
-   mkdir -p /opt/hotwheels-tracker
-   # copy the project into /opt/hotwheels-tracker (git clone, scp, or a release tarball)
-   chown -R hotwheels:hotwheels /opt/hotwheels-tracker
-   sudo -u hotwheels npm ci --omit=dev --prefix /opt/hotwheels-tracker
-   mkdir -p /opt/hotwheels-tracker/storage
-   chown -R hotwheels:hotwheels /opt/hotwheels-tracker/storage
+   useradd --system --home /opt/wheelstash --shell /usr/sbin/nologin wheelstash
+   mkdir -p /opt/wheelstash
+   # copy the project into /opt/wheelstash (git clone, scp, or a release tarball)
+   chown -R wheelstash:wheelstash /opt/wheelstash
+   sudo -u wheelstash npm ci --omit=dev --prefix /opt/wheelstash
+   mkdir -p /opt/wheelstash/storage
+   chown -R wheelstash:wheelstash /opt/wheelstash/storage
    ```
 
-4. **Install the systemd unit.** Copy [`deploy/hotwheels.service`](../deploy/hotwheels.service) to `/etc/systemd/system/hotwheels.service`. If `node` is not on the default `PATH` for services, set `ExecStart=/usr/local/bin/node server.js`. Create `/etc/hotwheels-tracker.env` from [`.env.example`](../.env.example) (at least `TZ`, and `OLLAMA_URL` if you use AI). Then:
+4. **Install the systemd unit.** Copy [`deploy/wheelstash.service`](../deploy/wheelstash.service) to `/etc/systemd/system/wheelstash.service`. If `node` is not on the default `PATH` for services, set `ExecStart=/usr/local/bin/node server.js`. Create `/etc/wheelstash.env` from [`.env.example`](../.env.example) (at least `TZ`, and `OLLAMA_URL` if you use AI). Then:
 
    ```bash
    systemctl daemon-reload
-   systemctl enable --now hotwheels
-   systemctl status hotwheels
+   systemctl enable --now wheelstash
+   systemctl status wheelstash
    ```
 
 5. Open `http://192.168.1.50:3000` (your address). For HTTPS, install Tailscale in the container (an unprivileged CT needs `/dev/net/tun` bound in the container config, then `pct reboot <CTID>`) or put a proxy on a neighboring VM. See [HTTPS for camera access](#https-for-camera-access).
 
-Updates: unpack a new release into `/opt/hotwheels-tracker` while leaving `storage/` in place, run `npm ci --omit=dev` as `hotwheels`, and `systemctl restart hotwheels`. Back up with `vzdump <CTID>` and/or a tarball of `/opt/hotwheels-tracker/storage`.
+Updates: unpack a new release into `/opt/wheelstash` while leaving `storage/` in place, run `npm ci --omit=dev` as `wheelstash`, and `systemctl restart wheelstash`. Back up with `vzdump <CTID>` and/or a tarball of `/opt/wheelstash/storage`.
 
 ### Option B — Docker inside a VM
 
-Create a Debian or Ubuntu VM, install Docker Engine and Compose, clone this repo (or copy it) to a path such as `/opt/hotwheels-tracker`, and follow the Docker Compose quick start. Bind-mount `./storage` to a disk you back up with the VM, or to a virtiofs / NFS mount. HTTPS is the same: Tailscale on the VM, or a reverse proxy VM in front.
+Create a Debian or Ubuntu VM, install Docker Engine and Compose, clone this repo (or copy it) to a path such as `/opt/wheelstash`, and follow the Docker Compose quick start. Bind-mount `./storage` to a disk you back up with the VM, or to a virtiofs / NFS mount. HTTPS is the same: Tailscale on the VM, or a reverse proxy VM in front.
 
 ## Standalone Ubuntu
 
@@ -394,16 +392,16 @@ These steps fit Ubuntu 22.04 and 24.04 on a bare metal box or a VM. Use `sudo` a
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker "$USER"   # then log out and back in
 
-sudo mkdir -p /opt/hotwheels-tracker
-sudo chown "$USER":"$USER" /opt/hotwheels-tracker
-# copy or clone the project into /opt/hotwheels-tracker
-cd /opt/hotwheels-tracker
+sudo mkdir -p /opt/wheelstash
+sudo chown "$USER":"$USER" /opt/wheelstash
+# copy or clone the project into /opt/wheelstash
+cd /opt/wheelstash
 cp .env.example .env
 # edit .env: TZ, maybe OLLAMA_URL
 docker compose up -d --build
 ```
 
-Enable Docker to start on boot (`systemctl enable docker`). Back up `/opt/hotwheels-tracker/storage`. Put Caddy, nginx, or Tailscale Serve in front if you need HTTPS.
+Enable Docker to start on boot (`systemctl enable docker`). Back up `/opt/wheelstash/storage`. Put Caddy, nginx, or Tailscale Serve in front if you need HTTPS.
 
 ### Plain Node with systemd
 
@@ -413,25 +411,25 @@ curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 node -v
 
-sudo useradd --system --home /opt/hotwheels-tracker --shell /usr/sbin/nologin hotwheels
-sudo mkdir -p /opt/hotwheels-tracker
+sudo useradd --system --home /opt/wheelstash --shell /usr/sbin/nologin wheelstash
+sudo mkdir -p /opt/wheelstash
 # copy the project, then:
-sudo npm ci --omit=dev --prefix /opt/hotwheels-tracker
-sudo mkdir -p /opt/hotwheels-tracker/storage
-sudo chown -R hotwheels:hotwheels /opt/hotwheels-tracker
+sudo npm ci --omit=dev --prefix /opt/wheelstash
+sudo mkdir -p /opt/wheelstash/storage
+sudo chown -R wheelstash:wheelstash /opt/wheelstash
 
-sudo cp deploy/hotwheels.service /etc/systemd/system/hotwheels.service
-sudo cp .env.example /etc/hotwheels-tracker.env
-sudo ${EDITOR:-nano} /etc/hotwheels-tracker.env
+sudo cp deploy/wheelstash.service /etc/systemd/system/wheelstash.service
+sudo cp .env.example /etc/wheelstash.env
+sudo ${EDITOR:-nano} /etc/wheelstash.env
 sudo systemctl daemon-reload
-sudo systemctl enable --now hotwheels
+sudo systemctl enable --now wheelstash
 ```
 
-Open `http://your-ubuntu-host:3000`. Logs: `journalctl -u hotwheels -f`.
+Open `http://your-ubuntu-host:3000`. Logs: `journalctl -u wheelstash -f`.
 
 ## Other Linux distributions
 
-The app is a single Node process (or a Docker container). Package names differ; the layout above stays the same: install Node 22+, copy the project to `/opt/hotwheels-tracker`, use `deploy/hotwheels.service`, keep data in `storage/`.
+The app is a single Node process (or a Docker container). Package names differ; the layout above stays the same: install Node 22+, copy the project to `/opt/wheelstash`, use `deploy/wheelstash.service`, keep data in `storage/`.
 
 ### Debian
 
@@ -462,7 +460,7 @@ Use a 64-bit Raspberry Pi OS (Bookworm or newer) or Ubuntu for Pi. The official 
 ```bash
 # Docker is usually the easiest path on a Pi
 curl -fsSL https://get.docker.com | sh
-cd /opt/hotwheels-tracker
+cd /opt/wheelstash
 docker compose up -d --build
 ```
 
@@ -476,7 +474,7 @@ For AI recognition, a Pi is rarely a good place to run `qwen2.5vl:7b`. Point `OL
 2. Replace the application files. Leave `storage/` untouched.
    - Git: `git pull` (or unpack a new release).
    - Docker: `docker compose up -d --build`.
-   - TrueNAS tarball: copy a new `hotwheels-tracker-release.tgz` and restart the app.
+   - TrueNAS tarball: copy a new `wheelstash-release.tgz` and restart the app.
 3. Run `npm ci --omit=dev` if you are not using Docker (in case dependencies changed).
 4. Restart the service or container.
 5. Open `/api/health` and click around the UI.

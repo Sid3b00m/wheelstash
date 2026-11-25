@@ -1,8 +1,8 @@
 {
-  "name": "hotwheels-tracker",
+  "name": "wheelstash",
   "version": "1.0.0",
   "private": true,
-  "description": "Self-hosted Hot Wheels collection tracker",
+  "description": "A self-hosted collection tracker for Hot Wheels collectors",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -16,5 +16,5 @@
     "express": "^4.21.2",
     "node-cron": "^3.0.3"
   },
-  "license": "MIT"
+  "license": "GPL-3.0-or-later"
 }
