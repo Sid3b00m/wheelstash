@@ -6,6 +6,7 @@ This is the full install and operations guide for Wheelstash, a self-hosted coll
 - Proxmox (an LXC container running Node 22, or Docker inside a VM)
 - Standalone Ubuntu (Docker Compose, or plain Node with systemd)
 - Other Linux variants: Debian, Fedora / RHEL, Arch, and Raspberry Pi (arm64)
+- Windows 10/11 (Docker Desktop with WSL2, or native Node 22), plus a short note on Windows Server
 
 The app has **no login or access control**. Run it only on a trusted LAN or a tailnet, or put it behind your own authentication proxy.
 
@@ -35,7 +36,7 @@ cp .env.example .env   # optional; edit values described below
 
 ## Environment variables
 
-The process reads these directly. With Docker Compose, values in `.env` are also substituted into `docker-compose.yml`. A systemd unit can load the same file with `EnvironmentFile=/etc/wheelstash.env`.
+The process reads these directly. With Docker Compose, values in `.env` are also substituted into `docker-compose.yml`. A systemd unit can load the same file with `EnvironmentFile=/etc/wheelstash.env`. On Windows, set the same variables in the PowerShell session (for example `$env:TZ = "UTC"`), in Task Scheduler, or with NSSM; the Node process does not auto-load `.env`. See [Windows](#windows).
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -112,7 +113,7 @@ npm test          # optional
 npm start         # or: npm run dev
 ```
 
-Open `http://localhost:3000`. For a machine that should keep the app running after logout, use the systemd unit in [Standalone Ubuntu](#standalone-ubuntu).
+Open `http://localhost:3000`. For a machine that should keep the app running after logout, use the systemd unit in [Standalone Ubuntu](#standalone-ubuntu), or Task Scheduler / NSSM in [Windows](#windows).
 
 ## The 113-car rarity dataset
 
@@ -267,6 +268,8 @@ docker compose start
 For systemd, stop the service, replace `/opt/wheelstash/storage`, fix ownership (`chown -R wheelstash:wheelstash ...`), and start the service. Opening the UI should show the same collectors and cars.
 
 Export CSV / JSON from the header (or `/api/export.csv` and `/api/export.json`) is a good extra copy of the catalog, but it is not a full backup (it does not include all rarity edits, the photo cache, or learned barcodes).
+
+Windows backup examples (PowerShell and Docker Desktop) are in [Windows](#updating-and-backup-on-windows).
 
 Platform snapshots:
 
@@ -468,6 +471,199 @@ For AI recognition, a Pi is rarely a good place to run `qwen2.5vl:7b`. Point `OL
 
 32-bit armhf is not a target; use a 64-bit OS.
 
+## Windows
+
+Windows 10 or 11 (64-bit) both work. Pick **Docker Desktop** with the WSL2 engine, or a **native Node 22** (or newer) process. The two paths are described separately. A short note at the end covers Windows Server.
+
+The app has **no login or access control**. Run it only on a trusted LAN or a tailnet, or put it behind your own authentication proxy. Placeholders such as `C:\wheelstash`, `your-windows-host`, and `your-host.your-tailnet.ts.net` are examples — use your own paths and names.
+
+### Docker Desktop (Windows 10/11 with WSL2)
+
+1. Use a 64-bit Windows 10 (recent feature update) or Windows 11 PC, with virtualization enabled in firmware.
+2. Install [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/) and choose the **WSL2** engine (the default). Allow Windows to install the WSL2 components if it asks, then sign in or skip according to your preference. Confirm with `docker version` and `docker compose version` in a new PowerShell window.
+3. [Git for Windows](https://git-scm.com/download/win) is optional but useful for `git clone`. You can also unpack a [release zip](https://github.com/Sid3b00m/wheelstash/releases) instead.
+
+From PowerShell, in a folder you control:
+
+```powershell
+git clone https://github.com/Sid3b00m/wheelstash.git
+cd wheelstash
+Copy-Item .env.example .env
+# notepad .env   # set TZ (for example America/Chicago) and OLLAMA_URL if you use AI
+docker compose up -d --build
+```
+
+Open `http://localhost:3000`. Logs: `docker compose logs -f`. Stop: `docker compose down` (this does not delete `.\storage`).
+
+**Where the data lives.** The Compose file bind-mounts `${DATA_DIR:-./storage}` to `/app/storage` in the container. If you ran Compose from `C:\wheelstash`, the only folder you need to back up is `C:\wheelstash\storage` on the Windows volume. Keep the project on a normal Windows path, or inside a WSL distro's own filesystem. Bind-mounting a `/mnt/c/...` path from a WSL shell works but is slower; running `docker compose` from PowerShell on a Windows path is the straightforward option.
+
+**Firewall and LAN access.** `http://localhost:3000` on the same PC does not need a firewall change. For a phone or another computer on your LAN, open `http://your-windows-host:3000`. If that connection is refused, add an inbound Windows Firewall rule for the published host port (Docker Desktop sometimes creates one for you):
+
+```powershell
+New-NetFirewallRule -DisplayName "Wheelstash" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow
+```
+
+If you published a different host port (for example `3030:3000`), use that host port in the rule instead.
+
+### Native Node 22
+
+Node **22 or newer** is required. The app uses the built-in `node:sqlite` module, so Node 20 and earlier will not start.
+
+**Install Node.** Use the current [Node.js LTS Windows Installer (MSI)](https://nodejs.org/) (22 or newer), or winget:
+
+```powershell
+winget install --id OpenJS.NodeJS.LTS -e
+```
+
+Close and reopen PowerShell so `node` and `npm` are on `PATH`. Check with `node -v` — it must report v22 or newer. `npm` is included with Node.
+
+**Get the code**, either by clone:
+
+```powershell
+git clone https://github.com/Sid3b00m/wheelstash.git
+cd wheelstash
+```
+
+or by unpacking a release zip from the [Releases](https://github.com/Sid3b00m/wheelstash/releases) page and `cd` into the unpacked folder.
+
+**Install, test, and run:**
+
+```powershell
+npm ci
+npm test          # optional
+$env:HOST = "0.0.0.0"
+$env:PORT = "3000"
+$env:DATA_DIR = "$PWD\storage"   # optional; the default is a storage folder next to server.js
+$env:TZ = "UTC"                  # or America/Chicago, Europe/London, and so on
+# $env:OLLAMA_URL = "http://127.0.0.1:11434"
+npm start
+```
+
+The Node process does **not** auto-load `.env`. Set variables in that PowerShell session, or in Task Scheduler / NSSM as shown below. Open `http://localhost:3000`.
+
+**Data folder.** By default this is `storage\` in the project directory (override with `DATA_DIR`). It holds `collection.db` (plus `-wal` and `-shm` while the server is running), `rarity.json`, hunt and refresh state, and `uploads\`. That folder is what you back up.
+
+**Windows Firewall**, if other devices on the LAN should reach the app:
+
+```powershell
+New-NetFirewallRule -DisplayName "Wheelstash" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow
+```
+
+#### Start on boot with Task Scheduler
+
+No extra software is required.
+
+Create a small starter script so environment variables are set reliably. Save this as `C:\wheelstash\start-wheelstash.cmd`, adjusting the paths to match your install:
+
+```bat
+@echo off
+cd /d C:\wheelstash
+set HOST=0.0.0.0
+set PORT=3000
+set DATA_DIR=C:\wheelstash\storage
+set TZ=UTC
+rem set OLLAMA_URL=http://127.0.0.1:11434
+"C:\Program Files\nodejs\node.exe" server.js
+```
+
+Confirm the Node path with `where.exe node`. Then:
+
+1. Open **Task Scheduler** → **Create Task** (not Create Basic Task).
+2. **General:** name it `Wheelstash`. On a shared or always-on machine, choose **Run whether user is logged on or not**. Turn on **Hidden** if you do not want a window.
+3. **Triggers:** **At startup** (or **At log on** for a personal PC). Optionally enable **Start the task as soon as possible after a scheduled start is missed**.
+4. **Actions:** **Start a program**. Program/script is `C:\wheelstash\start-wheelstash.cmd`. Start in (optional) is `C:\wheelstash`.
+5. **Settings:** allow the task to run on demand, and do not stop it after a short time limit (the app should keep running).
+
+Start the task once and open `http://localhost:3000`. To update later, stop the task, replace the app files, and start it again.
+
+#### Start on boot with NSSM (Windows service)
+
+[NSSM](https://nssm.cc/) can run the same process as a Windows service. Download it and call `nssm.exe` by full path, or put it on `PATH`. From an elevated PowerShell, after `C:\wheelstash` is in place and `npm ci` has been run:
+
+```powershell
+New-Item -ItemType Directory -Force -Path C:\wheelstash\logs | Out-Null
+nssm install Wheelstash "C:\Program Files\nodejs\node.exe" server.js
+nssm set Wheelstash AppDirectory C:\wheelstash
+nssm set Wheelstash AppEnvironmentExtra HOST=0.0.0.0 PORT=3000 DATA_DIR=C:\wheelstash\storage TZ=UTC
+nssm set Wheelstash AppStdout C:\wheelstash\logs\out.log
+nssm set Wheelstash AppStderr C:\wheelstash\logs\err.log
+nssm set Wheelstash Start SERVICE_AUTO_START
+nssm start Wheelstash
+```
+
+If you use Ollama, append `OLLAMA_URL=http://127.0.0.1:11434` to `AppEnvironmentExtra` (space-separated `NAME=value` pairs). Manage the service with `nssm stop Wheelstash`, `nssm edit Wheelstash`, or `services.msc`. The data to back up is still `C:\wheelstash\storage`, not the log folder.
+
+### Optional Ollama for Windows
+
+Install [Ollama for Windows](https://ollama.com/download). It listens on `http://127.0.0.1:11434` by default and typically starts with your user session.
+
+```powershell
+ollama pull qwen2.5vl:7b
+$env:OLLAMA_URL = "http://127.0.0.1:11434"
+```
+
+`qwen2.5vl:7b` is around 6 GB and is a reasonable default for an 8 GB GPU, same as on Linux. Set `OLLAMA_VISION_MODEL` if you use a different vision model.
+
+If the tracker itself runs in Docker Desktop, `127.0.0.1` inside the container is not your Windows host. Set `OLLAMA_URL=http://host.docker.internal:11434` in `.env` instead. If Ollama runs on another machine, use `http://your-ollama-host:11434`. Do not publish port 11434 to the public internet.
+
+Confirm with `GET /api/scan/ai/status` as described in [Optional Ollama vision AI](#optional-ollama-vision-ai). **Scan barcode / text** and **Add by car number** still work if Ollama is off.
+
+### HTTPS for camera access
+
+The live camera preview needs a secure context — HTTPS, or `http://localhost` / `http://127.0.0.1` — just as on Linux. A plain `http://your-windows-host:3000` URL will usually be denied camera permission on a phone. **Take a photo** still works on HTTP because it uses the phone's regular camera app. See also [HTTPS for camera access](#https-for-camera-access).
+
+**Tailscale Serve on Windows.** Install [Tailscale for Windows](https://tailscale.com/download/windows), sign in, then in PowerShell:
+
+```powershell
+tailscale serve --bg --https=8443 http://127.0.0.1:3000
+```
+
+Open `https://your-host.your-tailnet.ts.net:8443/` from a device signed into the same tailnet. This is Serve, not Funnel: it stays tailnet-only. Port 443 also works if it is free (`--https=443` and no port in the URL). To keep Serve after a reboot, run the same command from a startup task, then check `tailscale serve status`. Do **not** turn on Funnel unless you have added your own authentication.
+
+**Caddy** (or another reverse proxy) in front of `http://127.0.0.1:3000` is the other option. Install [Caddy for Windows](https://caddyserver.com/docs/install#windows) and use a Caddyfile:
+
+```caddy
+tracker.example.com {
+    reverse_proxy 127.0.0.1:3000
+}
+```
+
+Run `caddy run` from that file's directory, or install Caddy as a service. Caddy can obtain a Let's Encrypt certificate if the host has a public name and ports 80/443 are reachable; otherwise use your own certificates. Set `HOST=127.0.0.1` on the tracker if only the proxy should connect to it. nginx and other proxies follow the same pattern as in the Linux reverse-proxy examples.
+
+### Updating and backup on Windows
+
+**Update**
+
+1. Back up `storage\` (below).
+2. Stop the app: `docker compose stop`, or stop the Task Scheduler task / `nssm stop Wheelstash`, or Ctrl+C in the console.
+3. Replace the application files and leave `storage\` untouched. Git: `git pull`. Or unpack a new release zip over the project folder.
+4. If you run Node natively, run `npm ci` again in case dependencies changed. Skip this under Docker.
+5. Start it again: `docker compose up -d --build`, or start the task/service, or `npm start`.
+6. Open `/api/health` and click around the UI.
+
+To roll back, restore the previous application files and, if the new version changed the database, restore the matching `storage\` backup.
+
+**Backup**
+
+Stop the app first so SQLite is quiet, then archive the data folder:
+
+```powershell
+# Native example; adjust the paths
+$date = Get-Date -Format "yyyy-MM-dd"
+New-Item -ItemType Directory -Force -Path C:\Backups | Out-Null
+Compress-Archive -Path C:\wheelstash\storage\* -DestinationPath C:\Backups\wheelstash-storage-$date.zip
+```
+
+Under Docker Desktop, `docker compose stop`, archive `.\storage` the same way, then `docker compose start`. If you cannot stop the app, copy `collection.db`, `collection.db-wal`, and `collection.db-shm` together, plus the JSON files and `uploads\`.
+
+Restore by stopping the app, replacing `storage\`, and starting it again. Opening the UI should show the same collectors and cars. Export CSV / JSON from the header is a useful extra copy of the catalog, but it is not a full backup.
+
+### Windows Server
+
+The same Docker Desktop (where it is supported on your SKU) or native Node 22 steps work on current 64-bit Windows Server releases, including Server 2022 and 2025. Prefer a dedicated folder such as `C:\wheelstash`, run the process as a service (NSSM, or Task Scheduler with a managed service account), and open the firewall only for the ports you need. Server Core is fine for the native Node path if you are comfortable working in PowerShell only.
+
+Docker Desktop on Windows Server has licensing and SKU limits. If Desktop is not available, use native Node on the server, or run the Linux container on another host and point Windows clients at it.
+
 ## Updating the app
 
 1. Back up `storage/` (and a release tarball, if you use that pattern).
@@ -475,6 +671,7 @@ For AI recognition, a Pi is rarely a good place to run `qwen2.5vl:7b`. Point `OL
    - Git: `git pull` (or unpack a new release).
    - Docker: `docker compose up -d --build`.
    - TrueNAS tarball: copy a new `wheelstash-release.tgz` and restart the app.
+   - Windows: see [Windows](#updating-and-backup-on-windows) for Docker Desktop, Task Scheduler, and NSSM.
 3. Run `npm ci --omit=dev` if you are not using Docker (in case dependencies changed).
 4. Restart the service or container.
 5. Open `/api/health` and click around the UI.

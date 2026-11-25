@@ -6,7 +6,7 @@ This project is unofficial and is not affiliated with, endorsed by, or sponsored
 
 This app is intended for a local or trusted network (for example your LAN or a tailnet). It has no login or access control.
 
-**Full install instructions** for Docker, Node, TrueNAS SCALE, Proxmox, Ubuntu, and other Linux distros are in [docs/SETUP.md](docs/SETUP.md).
+**Full install instructions** for Docker, Node, TrueNAS SCALE, Proxmox, Ubuntu, other Linux distros, and Windows are in [docs/SETUP.md](docs/SETUP.md). Windows-specific steps (Docker Desktop with WSL2, native Node, Task Scheduler or NSSM, and the firewall) are in [docs/SETUP.md](docs/SETUP.md#windows).
 
 ## Features
 
